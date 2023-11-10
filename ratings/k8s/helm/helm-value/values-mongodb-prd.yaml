@@ -1,0 +1,9 @@
+image:
+  tag: 5.0-debian-11
+auth:
+  existingSecret: bookinfo-ratings-mongodb-secret-prd
+  username: ratings-prd
+  database: ratings-prd
+persistence:
+  enabled: false
+initdbScriptsConfigMap: cm-bookinfo-ratings-mongodb-prd

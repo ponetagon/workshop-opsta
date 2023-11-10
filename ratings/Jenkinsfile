@@ -1,0 +1,165 @@
+def scmVars
+
+pipeline {
+  agent {
+    kubernetes {
+      yaml """
+apiVersion: v1
+kind: Pod
+spec:
+ containers:
+ - name: docker
+   image: docker:24.0.6-dind
+   command:
+   tty: true
+   securityContext:
+     privileged: true
+ - name: helm
+   image: lachlanevenson/k8s-helm:v3.5.0
+   command:
+   - cat
+   tty: true
+ - name: skan
+   image: alcide/skan:v0.9.0-debug
+   command:
+   - cat
+   tty: true
+ - name: trivy
+   image: aquasec/trivy:latest
+   command:
+   - cat
+   tty: true
+ - name: java-node
+   image: timbru31/java-node:latest
+   command:
+   - cat 
+   tty: true
+   volumeMounts:
+   - name: dependency-check-data
+     mountPath: /home/jenkins/dependency-check-data
+ volumes:
+ - name: dependency-check-data
+   hostPath:
+     path: /tmp/dependency-check-data
+"""
+    }    
+  }
+  environment {
+    ENV_NAME = "${BRANCH_NAME == "main" ? "uat" : "${BRANCH_NAME}"}"
+    SCANNER_HOME = tool 'sonarqube-scanner'
+    PROJECT_KEY = "bookinfo-ratings"
+    PROJECT_NAME = "bookinfo-ratings"
+  }
+    stages {
+      stage('Clone ratings source code'){
+        steps {
+            container('jnlp') {
+              script {
+                      scmVars = git branch: "${BRANCH_NAME}",
+                        credentialsId: 'bookinfo-deploy-key',
+                        url: 'git@gitlab-01.opsta-workshop-pontakon.dedyn.io:workshop/bookinfo/ratings.git'
+                }
+            }
+         }
+      }
+      stage("skan") {
+        steps {
+          container("helm") { 
+            script {
+              sh """
+              helm template -f k8s/helm/helm-value/values-ratings-${ENV_NAME}.yaml \
+                   --namespace workshop-${ENV_NAME} bookinfo-ratings-${ENV_NAME} \
+                   --set extraEnv.COMMIT_ID=${scmVars.GIT_COMMIT} k8s/helm \
+                   > k8s-manifest-deploy.yaml
+                   """
+            }
+          }
+          container("skan") {
+            script {
+              sh "/skan manifest -f k8s-manifest-deploy.yaml"
+              archiveArtifacts artifacts: 'skan-result.html'
+              sh "rm k8s-manifest-deploy.yaml"
+            }
+          }
+        }
+      }
+      stage('Sonarqube Scanner') {
+        steps {
+          container('java-node') {
+            script {
+              withSonarQubeEnv('sonarqube') {
+                sh '''${SCANNER_HOME}/bin/sonar-scanner \
+                -D sonar.projectKey=${PROJECT_KEY} \
+                -D sonar.projectName=${PROJECT_NAME} \
+                -D sonar.projectVersion=${BRANCH_NAME}-${BUILD_NUMBER} \
+                -D sonar.sources=./src
+                ''' 
+              }
+              timeout(time: 1,unit: 'MINUTES') {
+                def qg = waitForQualityGate()
+                if (qg.status != 'OK' ) {
+                  error "Pipeline aborted due to quality gate failure: ${qg.status}"
+                } 
+              }
+            }
+          }
+        }
+      }  
+      stage('OWASP Dependency Check') {
+        steps {
+          container('java-node') {
+            script {
+              sh '''cd src/ && npm install --package-lock && cd ../'''
+              dependencyCheck(
+                additionalArguments: "--data /home/jenkins/dependency-check-data --out dependency-check-report.xml",  
+                odcInstallation: "dependency-check"
+              )
+              dependencyCheckPublisher(
+                pattern: 'dependency-check-report.xml'
+              )
+              sh '''rm -rf src/node_modules src/package-lock.json'''
+            }
+          }
+        }
+      }
+      stage('Build ratings Docker Image and push'){
+        steps {
+          container('docker'){
+            script {
+              docker.withRegistry('https://harbor.opsta-workshop-pontakon.dedyn.io', 'registry-bookinfo') {
+                docker.build("harbor.opsta-workshop-pontakon.dedyn.io/workshop/ratings:${ENV_NAME}").push()
+              }
+            }
+          }
+        }
+      }
+      stage('Trivy') {
+        steps {
+          container('trivy') {
+            script {
+              withCredentials([usernamePassword(credentialsId: 'registry-bookinfo', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+                sh """
+                export TRIVY_USERNAME=$USERNAME
+                export TRIVY_PASSWORD=$PASSWORD
+                export TRIVY_AUTH_URL="https://harbor.opsta-workshop-pontakon.dedyn.io"
+                trivy image harbor.opsta-workshop-pontakon.dedyn.io/workshop/ratings:${ENV_NAME}
+                """
+              }
+            }
+          }
+        }
+      }
+      stage('Deploy ratings with helm chart'){
+        steps {
+          container('helm'){
+            script {
+              withKubeConfig([credentialsId: 'kubeconfig']) {
+                  sh "helm upgrade --install -f k8s/helm/helm-value/values-ratings-${ENV_NAME}.yaml --wait \
+                    --namespace workshop-${ENV_NAME} bookinfo-ratings-${ENV_NAME} k8s/helm"
+              }    
+            }      
+          }
+        }
+      }
+   }
+}

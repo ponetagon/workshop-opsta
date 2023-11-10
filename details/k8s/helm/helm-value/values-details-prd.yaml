@@ -1,0 +1,16 @@
+details:
+  namespace: workshop-prd
+  image: harbor.opsta-workshop-pontakon.dedyn.io/workshop/details
+  tag: prd
+  replicas: 1
+  imagePullSecrets: secret-registry-bookinfo-prd
+  port: 9080
+  healthCheckPath: "/health"
+ingess:
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  ingressClassName: nginx
+  host: bookinfo-details-prd.opsta-workshop-pontakon.dedyn.io
+  path: "/"
+  serviceType: ClusterIP
+  secret_tls: bookinfo-details-prd

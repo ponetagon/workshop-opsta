@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.ingess.secret_tls }}  #name of this object
+  namespace: {{ .Values.productpage.namespace }} 
+spec:
+  dnsNames:
+    - {{ .Values.ingess.host }} 
+  secretName: {{ .Values.ingess.secret_tls }}
+  issuerRef:
+    name: cert
+    kind: ClusterIssuer
+

@@ -1,0 +1,9 @@
+image:
+  tag: 5.0-debian-11
+auth:
+  existingSecret: bookinfo-ratings-mongodb-secret-uat
+  username: ratings-uat
+  database: ratings-uat
+persistence:
+  enabled: false
+initdbScriptsConfigMap: cm-bookinfo-ratings-mongodb-uat

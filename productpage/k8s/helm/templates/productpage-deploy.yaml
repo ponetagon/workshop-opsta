@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: {{ .Release.Name }}
+  name: {{ .Release.Name }}
+  namespace: {{ .Values.productpage.namespace }}
+spec:
+  replicas: {{ .Values.productpage.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      containers:
+      - image: {{ .Values.productpage.image }}:{{ .Values.productpage.tag }}
+        name: {{ .Release.Name }}
+        imagePullPolicy: Always
+        env:
+        - name: DETAILS_HOSTNAME
+          value: {{ .Values.productpage.service.details }}
+        - name: RATINGS_HOSTNAME
+          value: {{ .Values.productpage.service.ratings }}
+        - name: REVIEWS_HOSTNAME
+          value: {{ .Values.productpage.service.reviews }}
+        ports:
+        - containerPort: {{ .Values.productpage.port }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.productpage.healthCheckPath }}
+            port: {{ .Values.productpage.port }}
+            scheme: HTTP
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.productpage.healthCheckPath }}
+            port: {{ .Values.productpage.port }}
+            scheme: HTTP
+      imagePullSecrets:
+      - name: {{ .Values.productpage.imagePullSecrets }}  

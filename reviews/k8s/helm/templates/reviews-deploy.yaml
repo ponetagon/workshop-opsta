@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: {{ .Release.Name }}
+  name: {{ .Release.Name }}
+  namespace: {{ .Values.reviews.namespace }}
+spec:
+  replicas: {{ .Values.reviews.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      containers:
+      - image: {{ .Values.reviews.image }}:{{ .Values.reviews.tag }}
+        name: {{ .Release.Name }}
+        imagePullPolicy: Always
+        env:
+        - name: RATINGS_SERVICE
+          value: {{ .Values.reviews.ratings.url }}
+        - name: ENABLE_RATINGS
+          value: {{ .Values.reviews.ratings.enable | quote }}
+        ports:
+        - containerPort: {{ .Values.reviews.port }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.reviews.healthCheckPath }}
+            port: {{ .Values.reviews.port }}
+            scheme: HTTP
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.reviews.healthCheckPath }}
+            port: {{ .Values.reviews.port }}
+            scheme: HTTP
+      imagePullSecrets:
+      - name: {{ .Values.reviews.imagePullSecrets }}  

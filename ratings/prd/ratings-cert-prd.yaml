@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: bookinfo-ratings-prd  #name of this object
+  namespace: workshop-prd
+spec:
+  dnsNames:
+    - bookinfo-ratings-prd.opsta-workshop-pontakon.dedyn.io
+  secretName: bookinfo-ratings-prd
+  issuerRef:
+    name: cert
+    kind: ClusterIssuer
+

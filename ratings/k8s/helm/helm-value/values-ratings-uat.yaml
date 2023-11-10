@@ -1,0 +1,22 @@
+ratings:
+  namespace: workshop-uat
+  image: harbor.opsta-workshop-pontakon.dedyn.io/workshop/ratings
+  tag: uat
+  replicas: 1
+  imagePullSecrets: secret-registry-bookinfo-uat
+  port: 8080
+  healthCheckPath: "/health"
+  mongodbPasswordExistingSecret: bookinfo-ratings-mongodb-secret-uat
+ingess:
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  ingressClassName: nginx
+  host: bookinfo-ratings-uat.opsta-workshop-pontakon.dedyn.io
+  path: "/"
+  serviceType: ClusterIP
+  secret_tls: bookinfo-ratings-uat
+extraEnv:
+  SERVICE_VERSION: v2 
+  MONGO_DB_URL: mongodb://bookinfo-ratings-mongodb-uat:27017/?authSource=ratings-uat
+  MONGO_DB_NAME: ratings-uat
+  MONGO_DB_USERNAME: ratings-uat

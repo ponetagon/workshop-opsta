@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: {{ .Release.Name }}
+  name: {{ .Release.Name }}
+  namespace: {{ .Values.details.namespace }}
+spec:
+  replicas: {{ .Values.details.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      containers:
+      - image: {{ .Values.details.image }}:{{ .Values.details.tag }}
+        name: {{ .Release.Name }}
+        imagePullPolicy: Always
+        ports:
+        - containerPort: {{ .Values.details.port }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.details.healthCheckPath }}
+            port: {{ .Values.details.port }}
+            scheme: HTTP
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.details.healthCheckPath }}
+            port: {{ .Values.details.port }}
+            scheme: HTTP
+      imagePullSecrets:
+      - name: {{ .Values.details.imagePullSecrets }}  

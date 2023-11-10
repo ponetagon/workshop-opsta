@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: bookinfo-ratings-uat  #name of this object
+  namespace: workshop-uat
+spec:
+  dnsNames:
+    - bookinfo-ratings-uat.opsta-workshop-pontakon.dedyn.io
+  secretName: bookinfo-ratings-uat
+  issuerRef:
+    name: cert
+    kind: ClusterIssuer
+

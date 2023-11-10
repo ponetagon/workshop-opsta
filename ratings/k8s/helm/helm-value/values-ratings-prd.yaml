@@ -1,0 +1,22 @@
+ratings:
+  namespace: workshop-prd
+  image: harbor.opsta-workshop-pontakon.dedyn.io/workshop/ratings
+  tag: prd
+  replicas: 1
+  imagePullSecrets: secret-registry-bookinfo-prd
+  port: 8080
+  healthCheckPath: "/health"
+  mongodbPasswordExistingSecret: bookinfo-ratings-mongodb-secret-prd
+ingess:
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  ingressClassName: nginx
+  host: bookinfo-ratings-prd.opsta-workshop-pontakon.dedyn.io
+  path: "/"
+  serviceType: ClusterIP
+  secret_tls: bookinfo-ratings-prd
+extraEnv:
+  SERVICE_VERSION: v2 
+  MONGO_DB_URL: mongodb://bookinfo-ratings-mongodb-prd:27017/?authSource=ratings-prd
+  MONGO_DB_NAME: ratings-prd
+  MONGO_DB_USERNAME: ratings-prd

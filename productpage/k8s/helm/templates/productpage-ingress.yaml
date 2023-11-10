@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Values.productpage.namespace }}
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: {{ .Values.ingess.ingressClassName }}
+  tls:
+  - hosts:
+    - {{ .Values.ingess.host }}
+    secretName: {{ .Values.ingess.secret_tls }}
+  rules:
+  - host: {{ .Values.ingess.host }}
+    http:
+      paths:
+      - path: {{ .Values.ingess.path }}
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ .Release.Name }}
+            port:
+              number: {{ .Values.productpage.port }}

@@ -1,0 +1,20 @@
+productpage:
+  namespace: workshop-dev
+  image: harbor.opsta-workshop-pontakon.dedyn.io/workshop/productpage
+  tag: v1
+  replicas: 1
+  imagePullSecrets: secret-registry-bookinfo-dev
+  port: 9080
+  healthCheckPath: "/health"
+  service:
+    ratings: https://bookinfo-ratings-dev.opsta-workshop-pontakon.dedyn.io
+    details: https://bookinfo-details-dev.opsta-workshop-pontakon.dedyn.io/details
+    reviews: https://bookinfo-reviews-dev.opsta-workshop-pontakon.dedyn.io
+ingess:
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  ingressClassName: nginx
+  host: bookinfo-productpage-dev.opsta-workshop-pontakon.dedyn.io
+  path: "/"
+  serviceType: ClusterIP
+  secret_tls: bookinfo-productpage-dev

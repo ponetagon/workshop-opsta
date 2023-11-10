@@ -1,0 +1,16 @@
+details:
+  namespace: workshop-uat
+  image: harbor.opsta-workshop-pontakon.dedyn.io/workshop/details
+  tag: uat
+  replicas: 1
+  imagePullSecrets: secret-registry-bookinfo-uat
+  port: 9080
+  healthCheckPath: "/health"
+ingess:
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  ingressClassName: nginx
+  host: bookinfo-details-uat.opsta-workshop-pontakon.dedyn.io
+  path: "/"
+  serviceType: ClusterIP
+  secret_tls: bookinfo-details-uat

@@ -1,0 +1,20 @@
+productpage:
+  namespace: workshop-prd
+  image: harbor.opsta-workshop-pontakon.dedyn.io/workshop/productpage
+  tag: prd
+  replicas: 1
+  imagePullSecrets: secret-registry-bookinfo-prd
+  port: 9080
+  healthCheckPath: "/health"
+  service:
+    ratings: https://bookinfo-ratings-prd.opsta-workshop-pontakon.dedyn.io
+    details: https://bookinfo-details-prd.opsta-workshop-pontakon.dedyn.io/details
+    reviews: https://bookinfo-reviews-prd.opsta-workshop-pontakon.dedyn.io
+ingess:
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  ingressClassName: nginx
+  host: bookinfo-productpage-prd.opsta-workshop-pontakon.dedyn.io
+  path: "/"
+  serviceType: ClusterIP
+  secret_tls: bookinfo-productpage-prd

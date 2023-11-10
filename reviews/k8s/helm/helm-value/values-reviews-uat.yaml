@@ -1,0 +1,19 @@
+reviews:
+  namespace: workshop-uat
+  image: harbor.opsta-workshop-pontakon.dedyn.io/workshop/reviews
+  tag: uat
+  replicas: 1
+  imagePullSecrets: secret-registry-bookinfo-uat
+  port: 9080
+  healthCheckPath: "/health"
+  ratings:
+    enable: "true"
+    url: https://bookinfo-ratings-uat.opsta-workshop-pontakon.dedyn.io
+ingess:
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  ingressClassName: nginx
+  host: bookinfo-reviews-uat.opsta-workshop-pontakon.dedyn.io
+  path: "/"
+  serviceType: ClusterIP
+  secret_tls: bookinfo-reviews-uat

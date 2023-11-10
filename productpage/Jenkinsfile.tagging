@@ -1,0 +1,66 @@
+pipeline {
+  agent {
+    kubernetes {
+      yaml """
+apiVersion: v1
+kind: Pod
+spec:
+ containers:
+ - name: docker
+   image: docker:24.0.6-dind
+   command:
+   tty: true
+   securityContext:
+     privileged: true
+ - name: git
+   image: alpine/git:v2.30.0
+   command:
+   - cat
+   tty: true
+"""
+    } 
+  }
+  
+  stages {
+    stage('Clone productpage source code') {
+      steps {
+        container('jnlp') {
+          script {
+            git branch: "main",
+              credentialsId: 'bookinfo-deploy-key',
+              url: 'git@gitlab-01.opsta-workshop-pontakon.dedyn.io:workshop/bookinfo/productpage.git'
+          }
+        }  
+      }
+    }
+    stage('Tag Docker Image') {
+      steps {
+        container('docker') {
+          script {
+            docker.withRegistry('https://harbor.opsta-workshop-pontakon.dedyn.io', 'registry-bookinfo') {
+              uatImage = docker.image("harbor.opsta-workshop-pontakon.dedyn.io/workshop/productpage:uat")
+              uatImage.pull()
+              uatImage.push("build-${BUILD_NUMBER}")
+            }
+          }
+        }
+      }
+    }
+    stage('Git tag') {
+      steps {
+        container('git') {
+          script {
+            sshagent(credentials: ['bookinfo-deploy-key']) {
+              sh """
+                git tag build-${BUILD_NUMBER}
+                SSH_AUTH_SOCK=${SSH_AUTH_SOCK} \
+                  GIT_SSH_COMMAND="ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no" \
+                  git push --tags
+              """
+            }
+          }
+        }
+      }
+    }
+  }
+}
