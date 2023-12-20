@@ -6,7 +6,18 @@ pipeline {
       yaml """
 apiVersion: v1
 kind: Pod
+metadata:
+  labels:
+    admission.datadoghq.com/enabled: "false"
 spec:
+ hostAliases:
+  - ip: "10.124.126.30"
+    hostnames:
+    - "chm-gitlab.ibank.co.th"
+  - ip: "100.100.200.7"
+    hostnames:
+    - "chm-sonarqube.ibank.co.th"
+    - "chm-trivy.ibank.co.th"
  containers:
  - name: docker
    image: docker:24.0.6-dind
@@ -19,8 +30,8 @@ spec:
    command:
    - cat
    tty: true
- - name: skan
-   image: alcide/skan:v0.9.0-debug
+ - name: python
+   image: python:3.10.12
    command:
    - cat
    tty: true
@@ -34,13 +45,6 @@ spec:
    command:
    - cat 
    tty: true
-   volumeMounts:
-   - name: dependency-check-data
-     mountPath: /home/jenkins/dependency-check-data
- volumes:
- - name: dependency-check-data
-   hostPath:
-     path: /tmp/dependency-check-data
 """
     }    
   }
@@ -56,32 +60,11 @@ spec:
             container('jnlp') {
               script {
                       scmVars = git branch: "${BRANCH_NAME}",
-                        credentialsId: 'bookinfo-deploy-key',
-                        url: 'git@gitlab-01.opsta-workshop-pontakon.dedyn.io:workshop/bookinfo/productpage.git'
+                        credentialsId: 'git-deploy-key',
+                        url: 'git@chm-gitlab.ibank.co.th:demo/bookinfo/productpage.git'
                 }
             }
          }
-      }
-      stage("skan") {
-        steps {
-          container("helm") { 
-            script {
-              sh """
-              helm template -f k8s/helm/helm-value/values-productpage-${ENV_NAME}.yaml \
-                   --namespace workshop-${ENV_NAME} bookinfo-productpage-${ENV_NAME} \
-                   --set extraEnv.COMMIT_ID=${scmVars.GIT_COMMIT} k8s/helm \
-                   > k8s-manifest-deploy.yaml
-                   """
-            }
-          }
-          container("skan") {
-            script {
-              sh "/skan manifest -f k8s-manifest-deploy.yaml"
-              archiveArtifacts artifacts: 'skan-result.html'
-              sh "rm k8s-manifest-deploy.yaml"
-            }
-          }
-        }
       }
       stage('Sonarqube Scanner') {
         steps {
@@ -105,18 +88,12 @@ spec:
           }
         }
       }  
-      stage('OWASP Dependency Check') {
+      stage('OWASP Dependency Track') {
         steps {
-          container('java-node') {
+          container('python') {
             script {
-              sh '''cd ./source'''
-              dependencyCheck(
-                additionalArguments: "--data /home/jenkins/dependency-check-data --out dependency-check-report.xml",  
-                odcInstallation: "dependency-check"
-              )
-              dependencyCheckPublisher(
-                pattern: 'dependency-check-report.xml'
-              )
+              sh '''cd source/ && pip install cyclonedx-bom && python3 -m cyclonedx_py -r -o bom.xml '''
+              dependencyTrackPublisher artifact: 'source/bom.xml', projectId: '90535e79-f454-4705-b931-52e49de5b726', synchronous: true
             }
           }
         }
@@ -125,8 +102,8 @@ spec:
         steps {
           container('docker'){
             script {
-              docker.withRegistry('https://harbor.opsta-workshop-pontakon.dedyn.io', 'registry-bookinfo') {
-                docker.build("harbor.opsta-workshop-pontakon.dedyn.io/workshop/productpage:${ENV_NAME}").push()
+              docker.withRegistry('https://registry.hub.docker.com', 'dockerhub') {
+                docker.build("ponetagon/demo-workshop:productpage-${ENV_NAME}").push()
               }
             }
           }
@@ -136,12 +113,12 @@ spec:
         steps {
           container('trivy') {
             script {
-              withCredentials([usernamePassword(credentialsId: 'registry-bookinfo', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+              withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
                 sh """
                 export TRIVY_USERNAME=$USERNAME
                 export TRIVY_PASSWORD=$PASSWORD
-                export TRIVY_AUTH_URL="https://harbor.opsta-workshop-pontakon.dedyn.io"
-                trivy -f json -o results.json image harbor.opsta-workshop-pontakon.dedyn.io/workshop/productpage:${ENV_NAME}
+                export TRIVY_AUTH_URL="https://registry.hub.docker.com"
+                trivy image --server http://chm-trivy.ibank.co.th -f json -o results.json ponetagon/demo-workshop:productpage-${ENV_NAME}
                 """
                 recordIssues(tools: [trivy(pattern: 'results.json')])
               }
@@ -163,3 +140,4 @@ spec:
       }
    }
 }
+
