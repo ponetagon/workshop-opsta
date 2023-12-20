@@ -6,7 +6,18 @@ pipeline {
       yaml """
 apiVersion: v1
 kind: Pod
+metadata:
+  labels:
+    admission.datadoghq.com/enabled: "false"
 spec:
+ hostAliases:
+  - ip: "10.124.126.30"
+    hostnames:
+    - "chm-gitlab.ibank.co.th"
+  - ip: "100.100.200.7"
+    hostnames:
+    - "chm-sonarqube.ibank.co.th"
+    - "chm-trivy.ibank.co.th"
  containers:
  - name: docker
    image: docker:24.0.6-dind
@@ -16,11 +27,6 @@ spec:
      privileged: true
  - name: helm
    image: lachlanevenson/k8s-helm:v3.5.0
-   command:
-   - cat
-   tty: true
- - name: skan
-   image: alcide/skan:v0.9.0-debug
    command:
    - cat
    tty: true
@@ -61,32 +67,11 @@ spec:
             container('jnlp') {
               script {
                       scmVars = git branch: "${BRANCH_NAME}",
-                        credentialsId: 'bookinfo-deploy-key',
-                        url: 'git@gitlab-01.opsta-workshop-pontakon.dedyn.io:workshop/bookinfo/reviews.git'
+                        credentialsId: 'git-deploy-key',
+                        url: 'git@chm-gitlab.ibank.co.th:demo/bookinfo/reviews.git'
                 }
             }
          }
-      }
-      stage("skan") {
-        steps {
-          container("helm") { 
-            script {
-              sh """
-              helm template -f k8s/helm/helm-value/values-reviews-${ENV_NAME}.yaml \
-                   --namespace workshop-${ENV_NAME} bookinfo-reviews-${ENV_NAME} \
-                   --set extraEnv.COMMIT_ID=${scmVars.GIT_COMMIT} k8s/helm \
-                   > k8s-manifest-deploy.yaml
-                   """
-            }
-          }
-          container("skan") {
-            script {
-              sh "/skan manifest -f k8s-manifest-deploy.yaml"
-              archiveArtifacts artifacts: 'skan-result.html'
-              sh "rm k8s-manifest-deploy.yaml"
-            }
-          }
-        }
       }
       stage('Sonarqube Scanner') {
         steps {
@@ -129,13 +114,22 @@ spec:
           }
         }
       }
-
+      stage('OWASP Dependency Track') {
+        steps {
+          container('gradle') {
+            script {
+              sh '''gradle cyclonedxBom && ls  '''
+              dependencyTrackPublisher artifact: 'build/reports/bom.xml', projectId: '088a19e5-6405-4a21-9d3b-926c2417bd0e', synchronous: true
+            }
+          }
+        }
+      }
       stage('Build reviews Docker Image and push'){
         steps {
           container('docker'){
             script {
-              docker.withRegistry('https://harbor.opsta-workshop-pontakon.dedyn.io', 'registry-bookinfo') {
-                docker.build("harbor.opsta-workshop-pontakon.dedyn.io/workshop/reviews:${ENV_NAME}").push()
+              docker.withRegistry('https://registry.hub.docker.com', 'dockerhub') {
+                docker.build("ponetagon/demo-workshop:reviews-${ENV_NAME}").push()
               }
             }
           }
@@ -145,12 +139,12 @@ spec:
         steps {
           container('trivy') {
             script {
-              withCredentials([usernamePassword(credentialsId: 'registry-bookinfo', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+              withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
                 sh """
                 export TRIVY_USERNAME=$USERNAME
                 export TRIVY_PASSWORD=$PASSWORD
-                export TRIVY_AUTH_URL="https://harbor.opsta-workshop-pontakon.dedyn.io"
-                trivy -f json -o results.json image harbor.opsta-workshop-pontakon.dedyn.io/workshop/reviews:${ENV_NAME}
+                export TRIVY_AUTH_URL="https://registry.hub.docker.com"
+                trivy image --server http://chm-trivy.ibank.co.th -f json -o results.json ponetagon/demo-workshop:reviews-${ENV_NAME}
                 """
                 recordIssues(tools: [trivy(pattern: 'results.json')])
               }
@@ -164,7 +158,7 @@ spec:
             script {
               withKubeConfig([credentialsId: 'kubeconfig']) {
                   sh "helm upgrade --install -f k8s/helm/helm-value/values-reviews-${ENV_NAME}.yaml --wait \
-                    --namespace workshop-${ENV_NAME} bookinfo-reviews-${ENV_NAME} k8s/helm"
+                   --create-namespace  --namespace workshop-${ENV_NAME} bookinfo-reviews-${ENV_NAME} k8s/helm"
               }    
             }      
           }
